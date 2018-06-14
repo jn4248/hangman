@@ -1,23 +1,22 @@
 
-# set up a sub-class in game class so that the contining the game
-# will reset the stats by creating a new game object, instead of
-# resetting the stats...ie: class Hangman and class Game?
-
-# using (@wrong_guesses_left - 1) a lot for conditions.  Should be able to
-# simplify how many times this is used in this way.  Perhaps another control
-# variable?
-
-# instead ofusing @wrong_guesses_left < 1 to check losing condition, make a
-# "lost" variable
-
-#  round_winner? and show_round_status methods seem really clunky in how they
-# handle conditions for winning.  SHould be simpler way to manage this.
-
-# have a variable: player_word_array that's set to same size as @word_array,
-# but filled with "_" that get's filled in? and then can compare to @word_array
-# to check win?  not sure if this is cleaner, but maybe more clear
-
-# anything else?  any flow control that can be simplified (if/then, etc...)
+# "MISS" and "MATCH" show up on the first round.
+#
+# after entering last incorrect guess... word_match = false in method
+# round_over?  (when entering final correct to solve, it shows true).
+# is this right?
+#
+# I think everything else is good. test with word_list set-word method, and
+# then save, before moving onto save-game
+#
+#
+#
+#
+#
+#
+#
+#
+#
+#
 
 
 
@@ -54,11 +53,14 @@ class Hangman
 
   def initialize(player_name)
     @player = Player.new(player_name)
-    @wrong_guesses_left = 6
+    @errors_left = 6
     @word_array = []
-    @word_positions_solved = []
+    @word_array_player = []
     @letters_guessed = []
     @word_list = []
+    @round_over = false
+    @round_won = false
+
   end
 
   def play_game
@@ -72,22 +74,32 @@ class Hangman
   end
 
   def play_round
-    set_word
-    round_over = false
-    until round_over
+    set_word_arrays
+    until @round_over
       show_round_status
       letter = guess_letter
       update_round(letter)
-      round_over = true if (round_winner? || @wrong_guesses_left < 1)
+      check_round_over?
     end
     update_score
     show_round_status
     reset_round_stats
   end
 
-  def set_word
+  def set_word_arraysz
+    word = "as"
+    @word_array = word.upcase.split("")
+    puts "set_word: The word is:  " + @word_array.join
+    puts "@word_array is:"
+    p @word_array
+    @word_array_player = @word_array.map { |letter| letter = "_" }
+    puts "@word_array_player is:"
+    p @word_array_player
+  end
+
+  def set_word_arrays
     # default word in case file does not exist
-    word = "WordListFileDoesNotExist"
+    word = "Word_List_File_Does_Not_Exist"
     # word_list has only one word per line
     if File.exist? "../word_list.txt"
       File.open("../word_list.txt").each do |line|
@@ -99,7 +111,8 @@ class Hangman
       word = @word_list.sample
     end
     @word_array = word.upcase.split("")
-    puts "set_word: The word is:  " + @word_array.join
+    # puts "set_word: The word is:  " + @word_array.join
+    @word_array_player = @word_array.map { |letter| letter = "_" }
   end
 
   # Returns letter chosen by user as guess.  Forces to capital lettes.
@@ -107,7 +120,7 @@ class Hangman
   def guess_letter
     guess = ""
     if @letters_guessed.size > 0
-      puts "\nSo far, you have already guessed the following letters:\n"
+      puts "\nSo far, you have already guessed the following letters:"
       show_letters_guessed
     end
     if @letters_guessed.size < 26
@@ -128,62 +141,63 @@ class Hangman
     return guess
   end
 
+  # updates letters solved, wrong guesses left, and letters guessed so far
   def update_round(guess)
     if @word_array.include?(guess)
       @word_array.each_with_index do |letter, index|
-        @word_positions_solved.push(index) if guess == letter
+        @word_array_player[index] = letter if letter == guess
       end
     else
-      @wrong_guesses_left -= 1
+      @errors_left -= 1
     end
     @letters_guessed.push(guess)
   end
 
+  # Called only after a round is known to be won or lost
   def update_score
-    if @wrong_guesses_left < 1
-      @player.increment_rounds_lost
-    else
+    if @round_won
       @player.increment_rounds_won
+    else
+      @player.increment_rounds_lost
     end
   end
 
-  def round_winner?
-    has_winner = false
-    word_positions = []
-    word_positions = (0..(@word_array.size-1)).to_a if (@word_array.size > 0)
-    if word_positions.all? { |position| @word_positions_solved.include?(position) }
-      has_winner = true
+  def check_round_over?
+    word_match = @word_array.eql?(@word_array_player) ? true : false
+    if word_match
+      @round_won = true
+      @round_over = true
+    elsif @errors_left < 1
+      @round_over = true
     end
-    return has_winner
   end
 
   def show_round_status
-    puts "================================================="
-    clue_word_array = @word_array.clone
-    @word_array.each_with_index do |letter, index|
-      clue_word_array[index] = "_" unless @word_positions_solved.include?(index)
+    # Do not display guess result before first guess, or on win/loss screen
+    unless @letters_guessed.empty?
+      puts "================================================="
+      puts (@word_array.include?(@letters_guessed.last) ? "\nMATCH!" : "\nMISS!")
     end
-    if round_winner?
-      puts "\nYou Won! Congrats Dude :)"
-      puts "You solved the word:  " + clue_word_array.join
+    if @round_won
+      puts "\nYou Won! Congratulations!"
+      puts "You solved the word:  \"#{@word_array_player.join}\""
       show_score
-    elsif @wrong_guesses_left < 1
-      puts "You Lost! Bummer Dude :("
-      puts "The word was:  " + @word_array.join
+    elsif @round_over
+      puts "\nYou Lost! Better luck next time..."
+      puts "The word was:  \"#{@word_array.join}\""
       show_score
     else
-      puts "\nHere's your clue so far:\n"
-      puts clue_word_array.join(" ")
-      error_singlular_plural = ( @wrong_guesses_left == 1 ) ? "error" : "errors"
-      puts "\nYou have #{@wrong_guesses_left} more #{error_singlular_plural} allowed."
+      puts "\nHere's your clue so far:"
+      puts ""
+      puts @word_array_player.join(" ")
+      puts "\nNumber of incorrect guesses left: #{@errors_left}"
     end
-    puts "\n-------------------------------------------------"
   end
 
   def play_again?
     valid_answer = %w{Y N YES NO}
     begin
-      puts "Would you like to play again?  (Y or N)"
+      puts "\nWould you like to play again?  (Y or N)"
       choice = gets.chomp.upcase
       unless valid_answer.include?(choice)
         raise ArgumentError.new("Selection was not of the correct format.")
@@ -192,6 +206,7 @@ class Hangman
       puts "Error: #{e.message}"
       retry
     end
+    puts "================================================="
     play_again = (choice[0] == "Y") ? true : false
   end
 
@@ -208,28 +223,33 @@ class Hangman
   end
 
   def show_instructions
-    puts "+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
-    puts "\nThis is a classic game of Hangman...but without the cute pictures"
+    puts "==================================================================="
+    puts "\nThis is a classic game of Hangman...but without the cute stick-"
+    puts "figure pictures hanging from a tree :)"
     puts "\nYou will be shown how many letters are in the mystery word, and"
-    puts "then asked to guess the missing letters. Your are allowed a total of"
-    puts "#{@wrong_guesses_left} 'misses' before the game will be lost."
-    puts "\nAfter each round, there is an option continue playing more rounds,"
-    puts "and the total number of rounds won and lost will be shown."
-    puts "\n+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++"
+    puts "then asked to guess the missing letters. Your are allowed a total"
+    puts "of #{@errors_left} 'misses'.  Guess the word before making so many losses, and"
+    puts "you win...but make as many misses before guessing the word, and"
+    puts "you lose."
+    puts "\nAfter each round, you'll have the option to continue playing more"
+    puts "rounds, and see the current tallied score of rounds won/lost."
+    puts "\n==================================================================="
   end
 
   def show_game_over
-    puts "-------------------------------------------------"
-    puts "\nThanks for playing.  Bye-Bye!"
-    puts "\n-------------------------------------------------"
+    puts "================================================="
+    puts "\nThanks for playing.  See you next time!"
+    puts "\n================================================="
   end
 
   def reset_round_stats
-    @wrong_guesses_left = 6
+    @errors_left = 6
     @word_array = []
-    @word_positions_solved = []
+    @word_array_player = []
     @letters_guessed = []
     @word_list = []
+    @round_over = false
+    @round_won = false
   end
 
 end # end class Hangman
