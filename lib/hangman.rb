@@ -165,6 +165,10 @@ class HangmanGame
     @errors_left = 6
     @round_over = false
     @round_won = false
+    # @continuing_saved_game:  Keeps game from resetting the round statistics
+    # and word arrays when using a saved game, and from displying "Match/Miss"
+    # in show_round_status, during 1st round of a continued saved game.
+    # Set true in load_game, and resets to false in show_round_status
     @continuing_saved_game = false
   end
 
@@ -173,7 +177,7 @@ class HangmanGame
       reset_round_stats
       set_word_arrays
     end
-    show_round_status #@continuing_saved_game is reset here
+    show_round_status
     until @round_over
       guess = guess_letter
       break if guess == "SAVE" || guess == "EXIT"
@@ -189,6 +193,7 @@ class HangmanGame
     valid_answer = %w[Y N]
     begin
       puts "\nWould you like to play another round?  (Y or N)"
+      puts "('N' will return you to the start menu)"
       choice = gets.chomp.upcase
       unless valid_answer.include?(choice)
         raise ArgumentError.new("Selection was not of the correct format.")
@@ -213,6 +218,7 @@ class HangmanGame
     all_lines.each { |line| line.chomp! }
     obj_string = all_lines.join
     self.unserialize(obj_string)
+    @continuing_saved_game = true # gets reset to false in show_round_status
     puts "Saved Game Loaded."
     puts "\n================================================="
   end
@@ -335,7 +341,7 @@ class HangmanGame
     unless @letters_guessed.empty? || @continuing_saved_game == true
       puts (@word_array.include?(@letters_guessed.last) ? "\nMATCH!" : "\nMISS!")
     end
-    @continuing_saved_game = false # resets after a save game.
+    @continuing_saved_game = false # Set to true during load_game.
     if @round_won
       puts "\nYou Won! Congratulations!"
       puts %Q(You solved the word:  "#{@word_array_player.join}")
@@ -363,7 +369,6 @@ class HangmanGame
   def save_game
     puts "================================================="
     puts "\nSaving game..."
-    @continuing_saved_game = true
     filename = "../saved_games/hangman_save.json"
     File.open(filename, "w") { |file| file.puts self.serialize }
     puts "Game Saved."
