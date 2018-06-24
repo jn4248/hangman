@@ -1,1 +1,1 @@
-{"players":["{\"@name\":\"li\",\"@rounds_won\":0,\"@rounds_lost\":0}"],"word_array":["L","E","G","I","B","L","Y"],"word_array_player":["_","E","_","I","_","_","_"],"letters_guessed":["E","I"],"errors_left":6,"round_over":false,"round_won":false,"continuing_saved_game":true}
+{"players":["{\"@name\":\"li\",\"@rounds_won\":0,\"@rounds_lost\":0}"],"word_array":["L","E","G","I","B","L","Y"],"word_array_player":["_","E","G","I","_","_","_"],"letters_guessed":["E","I","H","C","T","G"],"errors_left":3,"round_over":false,"round_won":false,"continuing_saved_game":true}

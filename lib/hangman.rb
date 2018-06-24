@@ -4,19 +4,67 @@ require "./basic_serializable"
 class Hangman
 
   def initialize
-    @player = meet_player
-    self.start_game  # Requires @player already be defined
+    @game_over = false
+    @player = Player.new("Player")
+    self.start_menu
   end
 
-  protected
 
-  def start_game
-    game = HangmanGame.new(@player)
+  # protected
+
+  def play_game(game)
+    keep_playing = true
+    while keep_playing
+      game.play_round
+      keep_playing = game.play_again?
+    end
+  end
+
+  def start_menu
+    show_instructions
+    @player.name = select_player_name
+    keep_playing = true
+    until @game_over
+      puts "================================================="
+      puts "<><>------------    MAIN MENU    ------------<><>"
+      puts "================================================="
+      game = HangmanGame.new(@player)
+      choice = select_game_type
+      case choice
+      when "N"
+        puts "\nStarting a New Game...\n "
+        puts "================================================="
+        play_game(game)
+      when "L"
+        filename = "../saved_games/hangman_save.json"
+        if File.exist?(filename)
+          # puts "\nLoading Saved Game...\n "
+          game.load_game(filename)
+        else
+          puts "\nSorry, no saved games available.  Starting a New Game..."
+        end
+        play_game(game)
+      when "C"
+        @player = Player.new(select_player_name)
+      when "Q"
+        puts "\nExiting the game...\n "
+        @game_over = true
+      else
+        puts "\nSomehow,an incorrect selection was processed, please try again...\n "
+      end
+      # puts "\n================================================="
+    end
+    show_game_over
+  end
+
+  def select_game_type
     begin
-      puts "\nWould you like to play a new game, or continue your last game?"
-      puts "(type 'N' for a new game, or 'L' to load your previous game)"
+      puts "\n#{@player}, would you like to play a new game, "
+      puts "load and continue a previous game, "
+      puts "change current player, or quit?"
+      puts "(Enter 'N', 'L', 'C', or 'Q')"
       choice = gets.chomp.strip.upcase
-      valid_answer = %w[N NEW L LOAD]
+      valid_answer = %w[N  L  C Q]
       unless valid_answer.include?(choice)
         raise ArgumentError.new("Selection was not of the correct format.")
       end
@@ -24,28 +72,16 @@ class Hangman
       puts "Error: #{e.message}"
       retry
     end
-    if choice == "L" || choice == "LOAD"
-      filename = "../saved_games/hangman_save.json"
-      if File.exist?(filename)
-        game.load_game(filename)
-      else
-        puts "\nSorry, no saved games available.  Starting a New Game..."
-      end
-    else
-      puts "\nStarting a New Game..."
-    end
-    puts "\n================================================="
-    game.play_game
+    return choice
   end
 
-  private
+  # private
 
-  def meet_player
-    show_instructions
+  def select_player_name
     puts "\nWho's playing today? (please enter your name)"
     player_name = gets.chomp.strip
-    puts "\nNice to meet you, #{player_name}."
-    @player = Player.new(player_name)
+    puts "\nNice to meet you, #{player_name}.\n "
+    return player_name
   end
 
   def show_instructions
@@ -71,12 +107,21 @@ class Hangman
     puts "\n==================================================================="
   end
 
+  def show_game_over
+    puts "================================================="
+    puts "================================================="
+    puts "\nThanks for playing.  See you next time!"
+    puts "\n================================================="
+    puts "================================================="
+  end
+
 end #end Hangman class
 
 class Player
 
   include BasicSerializable
 
+  attr_accessor :name
   attr_reader :rounds_won, :rounds_lost
 
   def initialize(name)
@@ -123,13 +168,42 @@ class HangmanGame
     @continuing_saved_game = false
   end
 
-  def play_game
-    keep_playing = true
-    while keep_playing
-      play_round
-      keep_playing = play_again?
+  def play_round
+    unless @continuing_saved_game == true
+      reset_round_stats
+      set_word_arrays
     end
-    show_game_over
+    show_round_status #@continuing_saved_game is reset here
+    until @round_over
+      guess = guess_letter
+      break if guess == "SAVE" || guess == "EXIT"
+      update_round(guess)
+      check_round_over?
+      update_score if @round_over == true
+      show_round_status
+    end
+  end
+
+  def play_again?
+    # reset to false if started last round from a saved game
+    valid_answer = %w[Y N]
+    begin
+      puts "\nWould you like to play another round?  (Y or N)"
+      choice = gets.chomp.upcase
+      unless valid_answer.include?(choice)
+        raise ArgumentError.new("Selection was not of the correct format.")
+      end
+    rescue ArgumentError=>e
+      puts "Error: #{e.message}"
+      retry
+    end
+    if choice == "Y"
+      puts "\nBeginning a New Round...\n " if choice[0] == "Y"
+      puts "================================================="
+    else
+      puts "\nReturning to Main Menu...\n "
+    end
+    return (choice == "Y") ? true : false
   end
 
   def load_game(filename)
@@ -139,10 +213,12 @@ class HangmanGame
     all_lines.each { |line| line.chomp! }
     obj_string = all_lines.join
     self.unserialize(obj_string)
-    puts "Game Loaded."
+    puts "Saved Game Loaded."
+    puts "\n================================================="
   end
 
-  protected
+
+  # protected
 
   def serialize
     obj = {}
@@ -175,24 +251,8 @@ class HangmanGame
     @continuing_saved_game = obj[:continuing_saved_game]
   end
 
-  private
 
-  def play_round
-    unless @continuing_saved_game == true
-      reset_round_stats
-      set_word_arrays
-    end
-    show_round_status
-    until @round_over
-      guess = guess_letter
-      break if guess == "SAVE" || guess == "EXIT"
-      update_round(guess)
-      check_round_over?
-      update_score if @round_over == true
-      show_round_status
-    end
-  end
-
+  # private
 
   def set_word_list
     word_list = []
@@ -212,7 +272,6 @@ class HangmanGame
     return word_list
   end
 
-
   def set_word_arrays
     @word_array = @word_list.sample.upcase.split("")
     @word_array_player = @word_array.map { |letter| letter = "_" }
@@ -227,8 +286,8 @@ class HangmanGame
       puts "(" + @letters_guessed.join(", ") + ")"
     end
     begin
-      puts "\nPlease enter a letter for your guess: "
-      puts "(or type keyword: 'SAVE' or 'EXIT')"
+      puts "\n\nPlease enter a letter for your guess: "
+      puts "(or type the entire keyword: 'SAVE' or 'EXIT')"
       guess = gets.chomp.upcase
       if guess == "SAVE"
         save_game
@@ -273,9 +332,10 @@ class HangmanGame
   def show_round_status
     puts "================================================="
     # Do not display guess result before first guess, or on win/loss screen
-    unless @letters_guessed.empty?
+    unless @letters_guessed.empty? || @continuing_saved_game == true
       puts (@word_array.include?(@letters_guessed.last) ? "\nMATCH!" : "\nMISS!")
     end
+    @continuing_saved_game = false # resets after a save game.
     if @round_won
       puts "\nYou Won! Congratulations!"
       puts %Q(You solved the word:  "#{@word_array_player.join}")
@@ -285,7 +345,7 @@ class HangmanGame
       puts %Q(The word was:  "#{@word_array.join}")
       show_score
     else
-      puts "\nHere's your clue so far:\n "
+      puts "\n#{@player}, here's your clue so far:\n "
       puts @word_array_player.join(" ")
       puts "\nNumber of incorrect guesses left: #{@errors_left}"
     end
@@ -298,25 +358,6 @@ class HangmanGame
     else
       @player.increment_rounds_lost
     end
-  end
-
-  def play_again?
-    # reset to false if started last round from a saved game
-    @continuing_saved_game = false
-    valid_answer = %w[Y N YES NO]
-    begin
-      puts "\nWould you like to play again?  (Y or N)"
-      choice = gets.chomp.upcase
-      unless valid_answer.include?(choice)
-        raise ArgumentError.new("Selection was not of the correct format.")
-      end
-    rescue ArgumentError=>e
-      puts "Error: #{e.message}"
-      retry
-    end
-    puts "\nBeginning a New Round...\n " if choice[0] == "Y"
-    puts "================================================="
-    return (choice[0] == "Y") ? true : false
   end
 
   def save_game
@@ -343,12 +384,6 @@ class HangmanGame
     puts "\n#{@player}, Your current score is:"
     puts "\n#{@player.rounds_won} Rounds Won"
     puts "#{@player.rounds_lost} Rounds Lost"
-  end
-
-  def show_game_over
-    puts "================================================="
-    puts "\nThanks for playing.  See you next time!"
-    puts "\n================================================="
   end
 
 end # end class HangmanGame
