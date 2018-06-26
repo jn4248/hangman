@@ -1,30 +1,22 @@
 require "json"
 require "./basic_serializable"
 
+# Game shell with game menu
 class Hangman
 
   def initialize
-    @game_over = false
     @player = Player.new("Player")
     self.start_menu
   end
 
+  protected
 
-  # protected
-
-  def play_game(game)
-    keep_playing = true
-    while keep_playing
-      game.play_round
-      keep_playing = game.play_again?
-    end
-  end
-
+  # main start menu loop, to play/load game rounds
   def start_menu
     show_instructions
     @player.name = select_player_name
-    keep_playing = true
-    until @game_over
+    game_over = false
+    until game_over
       puts "================================================="
       puts "<><>------------    MAIN MENU    ------------<><>"
       puts "================================================="
@@ -38,25 +30,37 @@ class Hangman
       when "L"
         filename = "../saved_games/hangman_save.json"
         if File.exist?(filename)
-          # puts "\nLoading Saved Game...\n "
           game.load_game(filename)
         else
-          puts "\nSorry, no saved games available.  Starting a New Game..."
+          puts "\nSorry, no saved games available.  Starting a New Game...\n "
         end
         play_game(game)
       when "C"
         @player = Player.new(select_player_name)
       when "Q"
         puts "\nExiting the game...\n "
-        @game_over = true
+        game_over = true
       else
-        puts "\nSomehow,an incorrect selection was processed, please try again...\n "
+        puts "\nSomehow, an incorrect selection was processed, please try again...\n "
       end
-      # puts "\n================================================="
     end
     show_game_over
   end
 
+  private
+
+  # main game loop
+  # Parameter:  HangmanGame object
+  def play_game(game)
+    keep_playing = true
+    while keep_playing
+      game.play_round
+      keep_playing = game.play_again?
+    end
+  end
+
+  # Prompts player for start menu choice: New Game, Load Game, Change Player, or Quit
+  # Return: player's choice (String)
   def select_game_type
     begin
       puts "\n#{@player}, would you like to play a new game, "
@@ -75,8 +79,8 @@ class Hangman
     return choice
   end
 
-  # private
-
+  # Prompts player for his/her name
+  # Return: Player's Name (String)
   def select_player_name
     puts "\nWho's playing today? (please enter your name)"
     player_name = gets.chomp.strip
@@ -93,8 +97,11 @@ class Hangman
     puts "of #{@errors_left} 'misses'.  Guess the word before making so many losses, and"
     puts "you win...but make as many misses before guessing the word, and"
     puts "you lose."
-    puts "\nAfter each round, you'll have the option to continue playing more"
-    puts "rounds, and see the current tallied score of rounds won/lost."
+    puts "\nFrom the main start menu, you have four options: start a new game,"
+    puts "load a saved game, change the current player, or quit the game."
+    puts "\nOnce a game has begun, you'll have the option to continue playing"
+    puts "more rounds after each completed round, and the current tallied "
+    puts "score of rounds won/lost will be shown."
     puts "\nYou can also immediately exit from a round of play at any guess"
     puts "prompt, by typing in either 'save' (to save the game and exit the"
     puts "current round), or 'exit' (to exit the current round without saving)."
@@ -117,6 +124,7 @@ class Hangman
 
 end #end Hangman class
 
+# Player for Hangman
 class Player
 
   include BasicSerializable
@@ -150,34 +158,34 @@ class Player
 end # end class Player
 
 
+# Tracks state of one game of hangman, which can include one or multiple rounds
 class HangmanGame
 
   include BasicSerializable
 
-  attr_writer :continuing_saved_game
-
   def initialize(player)
     @player = player
     @word_list = set_word_list
-    @word_array = []
-    @word_array_player = []
-    @letters_guessed = []
+    @word_array = []            # mystery word the player is guessing
+    @word_array_player = []     # shows progress of correct guesses
+    @letters_guessed = []       # All letters guessed already by player
     @errors_left = 6
     @round_over = false
     @round_won = false
+    @continuing_saved_game = false
     # @continuing_saved_game:  Keeps game from resetting the round statistics
     # and word arrays when using a saved game, and from displying "Match/Miss"
     # in show_round_status, during 1st round of a continued saved game.
     # Set true in load_game, and resets to false in show_round_status
-    @continuing_saved_game = false
   end
 
+  # Tracks one round of Hangman
   def play_round
     unless @continuing_saved_game == true
       reset_round_stats
       set_word_arrays
     end
-    show_round_status
+    show_round_status   # @continuing_saved_game reset to false here
     until @round_over
       guess = guess_letter
       break if guess == "SAVE" || guess == "EXIT"
@@ -188,13 +196,13 @@ class HangmanGame
     end
   end
 
+  # Return: True/False (Boolean)
   def play_again?
-    # reset to false if started last round from a saved game
     valid_answer = %w[Y N]
     begin
       puts "\nWould you like to play another round?  (Y or N)"
       puts "('N' will return you to the start menu)"
-      choice = gets.chomp.upcase
+      choice = gets.chomp.strip.upcase
       unless valid_answer.include?(choice)
         raise ArgumentError.new("Selection was not of the correct format.")
       end
@@ -203,7 +211,7 @@ class HangmanGame
       retry
     end
     if choice == "Y"
-      puts "\nBeginning a New Round...\n " if choice[0] == "Y"
+      puts "\nBeginning a New Round...\n "
       puts "================================================="
     else
       puts "\nReturning to Main Menu...\n "
@@ -223,9 +231,9 @@ class HangmanGame
     puts "\n================================================="
   end
 
+  protected
 
-  # protected
-
+  # to serialize data for saved games
   def serialize
     obj = {}
     obj[:players] = [@player.serialize]
@@ -239,8 +247,10 @@ class HangmanGame
     @@serializer.dump(obj)
   end
 
+  # unserialize data from saved games
   def unserialize(string)
     obj = @@serializer.parse(string, {:symbolize_names => true})
+    # Note - seems like a hack, but only way I could get 1 player to un-json
     players = []
     obj[:players].each do |player_string|
       player = Player.new("")
@@ -257,23 +267,35 @@ class HangmanGame
     @continuing_saved_game = obj[:continuing_saved_game]
   end
 
+  private
 
-  # private
+  # Fixed to a single game save file
+  def save_game
+    puts "================================================="
+    puts "\nSaving game..."
+    filename = "../saved_games/hangman_save.json"
+    File.open(filename, "w") { |file| file.puts self.serialize }
+    puts "Game Saved."
+    puts "\n================================================="
+  end
 
+  # Create the list of words to draw from. Fixed for a single external file.
+  # Only selects words between min_length and max_length letters long (inclusive).
+  # Return: List of words (Array)
   def set_word_list
     word_list = []
     min_length = 5
     max_length = 12
-    # external word_list file has only one word per line
+    # Fixed external word_list file has only one word per line
     if File.exist? "../word_list.txt"
       File.open("../word_list.txt").each do |line|
-        line_clean = line.chomp.strip
+        line_clean = line.chomp
         if (line_clean.length >= min_length && line_clean.length <= max_length)
           word_list.push(line_clean)
         end
       end
     else
-      word_list.push("NoFileExists")
+      word_list.push("FileWordListTextDoesNotExist")
     end
     return word_list
   end
@@ -283,8 +305,8 @@ class HangmanGame
     @word_array_player = @word_array.map { |letter| letter = "_" }
   end
 
-  # Returns letter chosen by user as guess.  Forces to capital lettes.
-  # Returns nil string ("") if all letters have already been guessed.
+  # Returns letter or request chosen by user as guess.  Forces to capital letters.
+  # Return: The guessed letter or command (String)
   def guess_letter
     guess = ""
     if @letters_guessed.size > 0
@@ -294,14 +316,14 @@ class HangmanGame
     begin
       puts "\n\nPlease enter a letter for your guess: "
       puts "(or type the entire keyword: 'SAVE' or 'EXIT')"
-      guess = gets.chomp.upcase
+      guess = gets.chomp.strip.upcase
       if guess == "SAVE"
         save_game
       elsif guess == "EXIT"
         puts "\nExiting the current round..."
         puts "\n================================================="
       else
-        error_msg1 = "Selection was not of the correct format."
+        error_msg1 = "Selected letter was not of the correct format."
         raise ArgumentError.new(error_msg1) unless guess =~ /^[A-Z]$/
         error_msg2 = "Selected letter has already been guessed."
         raise ArgumentError.new(error_msg2) if @letters_guessed.include?(guess)
@@ -325,6 +347,7 @@ class HangmanGame
     @letters_guessed.push(guess)
   end
 
+  # Return: True/False (Boolean)
   def check_round_over?
     word_match = @word_array.eql?(@word_array_player) ? true : false
     if word_match
@@ -335,6 +358,7 @@ class HangmanGame
     end
   end
 
+  # Shows result of players guess, and if round was won or lost.
   def show_round_status
     puts "================================================="
     # Do not display guess result before first guess, or on win/loss screen
@@ -343,11 +367,11 @@ class HangmanGame
     end
     @continuing_saved_game = false # Set to true during load_game.
     if @round_won
-      puts "\nYou Won! Congratulations!"
+      puts "\nYou Won! Way to Go!\n "
       puts %Q(You solved the word:  "#{@word_array_player.join}")
       show_score
     elsif @round_over
-      puts "\nYou Lost! Better luck next time..."
+      puts "\nYou Lost! Better luck next time...\n "
       puts %Q(The word was:  "#{@word_array.join}")
       show_score
     else
@@ -366,13 +390,10 @@ class HangmanGame
     end
   end
 
-  def save_game
-    puts "================================================="
-    puts "\nSaving game..."
-    filename = "../saved_games/hangman_save.json"
-    File.open(filename, "w") { |file| file.puts self.serialize }
-    puts "Game Saved."
-    puts "\n================================================="
+  def show_score
+    puts "\n\n#{@player}, Your current score is:"
+    puts "\n#{@player.rounds_won} Rounds Won"
+    puts "#{@player.rounds_lost} Rounds Lost"
   end
 
   def reset_round_stats
@@ -383,12 +404,6 @@ class HangmanGame
     @round_over = false
     @round_won = false
     @continuing_saved_game = false
-  end
-
-  def show_score
-    puts "\n#{@player}, Your current score is:"
-    puts "\n#{@player.rounds_won} Rounds Won"
-    puts "#{@player.rounds_lost} Rounds Lost"
   end
 
 end # end class HangmanGame

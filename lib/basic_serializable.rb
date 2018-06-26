@@ -1,6 +1,6 @@
 require 'json'
 
-#mixin
+# mixin to serialize and unserialize simple class objects
 module BasicSerializable
 
   #should point to a class; change to a different
